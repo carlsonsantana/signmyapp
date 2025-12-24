@@ -2,6 +2,7 @@ package br.com.carlsonsantana.signmyapp;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
@@ -15,6 +16,12 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 
 public class App {
+    private static class AppException extends Exception {
+        public AppException(String message) {
+            super(message);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         var inputOption = createOption(
             "in",
@@ -64,14 +71,32 @@ public class App {
             var keyAlias = commandLine.getOptionValue("ks-key-alias");
             var keyPassword = commandLine.getOptionValue("key-pass");
 
-            sign(
-                inputApk,
-                outputApk,
-                keystoreFile,
-                storePassword,
-                keyAlias,
-                keyPassword
-            );
+            try {
+                sign(
+                    inputApk,
+                    outputApk,
+                    keystoreFile,
+                    storePassword,
+                    keyAlias,
+                    keyPassword
+                );
+            } catch (FileNotFoundException e) {
+                if (!inputApk.exists()) {
+                    System.err.println(
+                        "\"" + inputApk.getAbsolutePath() +
+                        "\" doesn't exists."
+                    );
+                }
+
+                if (!keystoreFile.exists()) {
+                    System.err.println(
+                        "\"" + keystoreFile.getAbsolutePath() +
+                        "\" doesn't exists."
+                    );
+                }
+
+                System.exit(1);
+            }
         } catch (ParseException e) {
             System.err.println(e.getMessage());
             new HelpFormatter().printHelp("signmyapp.jar", options);
@@ -106,6 +131,11 @@ public class App {
             keyAlias,
             keyPassword.toCharArray()
         );
+
+        if (privateKey == null) {
+            throw new AppException("Keystore key alias doesn't exists.");
+        }
+
         var certificate = (X509Certificate) keyStore.getCertificate(keyAlias);
 
         var signerConfig = new ApkSigner.SignerConfig.Builder(
